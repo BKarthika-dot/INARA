@@ -1,0 +1,38 @@
+{
+  "type": "Settings",
+  "audio": {
+    "input": {
+      "encoding": "linear16",
+      "sample_rate": 48000
+    },
+    "output": {
+      "encoding": "linear16",
+      "sample_rate": 48000
+    }
+  },
+  "agent": {
+    "language": "en",
+    "listen": {
+      "provider": {
+        "type": "deepgram",
+        "model": "nova-3",
+        "keyterms": ["hello", "goodbye"]
+      }
+    },
+    "think": {
+      "provider": {
+        "type": "open_ai",
+        "model": "gpt-4o-mini",
+        "temperature": 0.7
+      },
+      "prompt": "You are a helpful AI assistant focused on customer service."
+    },
+    "speak": {
+      "provider": {
+        "type": "deepgram",
+        "model": "aura-2-thalia-en"
+      }
+    },
+    "greeting": "Hello, and welcome. I'm Inara and I’ll be conducting this interview today. Please take a moment, and let me know when you’re ready to begin."
+  }
+}
