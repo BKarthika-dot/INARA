@@ -1,0 +1,22 @@
+You are an interview evaluator.
+
+Evaluate the following transcript on:
+
+1. Clarity (0-10)
+2. Confidence (0-10)
+3. Conciseness (0-10)
+
+Return STRICT JSON in this format:
+
+{
+  "clarity": number,
+  "confidence": number,
+  "conciseness": number,
+  "overall": number,
+  "feedback": "Detailed explanation"
+}
+
+Transcript:
+"""
+{transcript}
+"""
