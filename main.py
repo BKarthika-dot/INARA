@@ -15,22 +15,29 @@ from website.mongodb import interviews_collection, feedback_collection
 from datetime import datetime
 from bson import ObjectId
 
+
+# =========================
+# Interview session state
+# =========================
+
+MAX_QUESTIONS = 10
+sessions = {}
+
 load_dotenv()
 
 app = FastAPI()
 
 templates = Jinja2Templates(directory="website/templates")
 
-# Static files
 app.mount(
     "/static",
     StaticFiles(directory="website/static"),
     name="static"
 )
 
-# Routers
 app.include_router(auth_router)
 app.include_router(views_router)
+
 
 # =========================
 # Deepgram connection
@@ -74,7 +81,6 @@ model = genai.GenerativeModel("gemini-1.5-flash")
 
 
 def load_evaluation_prompt(transcript: str):
-
     with open("evaluation_prompt.txt", "r", encoding="utf-8") as file:
         template = file.read()
 
@@ -93,7 +99,6 @@ def evaluate_with_gemini(transcript: str):
 
         print("Gemini raw:", text)
 
-        # extract json block safely
         start = text.find("{")
         end = text.rfind("}") + 1
 
@@ -109,23 +114,23 @@ def evaluate_with_gemini(transcript: str):
         print("Gemini evaluation error:", e)
         return None
 
+
 async def store_evaluation(interview_id: ObjectId, evaluation: dict):
 
     await feedback_collection.insert_one({
         "interview_id": interview_id,
-        "clarity_score": evaluation.get("clarity"),
-        "confidence_score": evaluation.get("confidence"),
-        "conciseness_score": evaluation.get("conciseness"),
-        "overall_score": evaluation.get("overall"),
-        "feedback_text": evaluation.get("feedback"),
+        "clarity_score": evaluation.get("clarity") or evaluation.get("clarity_score"),
+        "confidence_score": evaluation.get("confidence") or evaluation.get("confidence_score"),
+        "conciseness_score": evaluation.get("conciseness") or evaluation.get("conciseness_score"),
+        "overall_score": evaluation.get("overall") or evaluation.get("overall_score"),
+        "feedback_text": evaluation.get("feedback") or evaluation.get("feedback_text"),
         "evaluated_at": datetime.utcnow()
     })
 
+    print("Evaluation inserted into feedback_collection")
+
 
 async def process_interview(transcript: str, user_id=None):
-    """
-    Save transcript + run Gemini evaluation
-    """
 
     result = await interviews_collection.insert_one({
         "user_id": ObjectId(user_id) if user_id else None,
@@ -136,8 +141,11 @@ async def process_interview(transcript: str, user_id=None):
     interview_id = result.inserted_id
 
     print("Transcript saved:", interview_id)
+    print("Running evaluation...")
 
     evaluation = evaluate_with_gemini(transcript)
+
+    print("Evaluation result:", evaluation)
 
     if evaluation:
         await store_evaluation(interview_id, evaluation)
@@ -161,10 +169,18 @@ async def websocket_endpoint(browser_ws: WebSocket):
 
     transcript_buffer = ""
     transcript_saved = False
-
     current_user_id = None
 
+    session_id = id(browser_ws)
+
+    sessions[session_id] = {
+        "role": None,
+        "question_count": 0,
+        "transcript": ""
+    }
+
     await dg_ws.send(json.dumps(config))
+
 
     async def browser_handler():
 
@@ -178,7 +194,6 @@ async def websocket_endpoint(browser_ws: WebSocket):
                 print("Browser disconnected")
                 break
 
-            # STOP button signal
             if msg.get("text") == "STOP_INTERVIEW":
 
                 print("Stopping interview")
@@ -206,6 +221,7 @@ async def websocket_endpoint(browser_ws: WebSocket):
 
                 await dg_ws.send(audio)
 
+
     async def deepgram_handler():
 
         nonlocal transcript_buffer
@@ -221,13 +237,41 @@ async def websocket_endpoint(browser_ws: WebSocket):
                     role = data.get("role")
                     content = data.get("content", "").strip()
 
-                    if content:
-                        transcript_buffer += f"{role.upper()}: {content}\n"
+                    if not content:
+                        continue
 
-                await browser_ws.send_text(msg)
+                    transcript_buffer += f"{role.upper()}: {content}\n"
+
+                    session = sessions.get(session_id)
+
+                    # Detect candidate role from first user message
+                    if role == "user" and session["role"] is None:
+                        session["role"] = content
+                        print("Detected role:", session["role"])
+
+                    # Count interviewer questions
+                    if role == "assistant" and "?" in content:
+
+                        session["question_count"] += 1
+                        print("Question count:", session["question_count"])
+
+                        if session["question_count"] >= MAX_QUESTIONS:
+
+                            print("Max questions reached — ending interview")
+
+                            await browser_ws.send_text(json.dumps({
+                                "type": "ConversationText",
+                                "role": "assistant",
+                                "content": "Thank you for the conversation. That concludes the interview."
+                            }))
+
+                            await browser_ws.close()
+                            await dg_ws.close()
+                            return
 
             elif isinstance(msg, bytes):
                 await browser_ws.send_bytes(msg)
+
 
     try:
 
@@ -250,6 +294,7 @@ async def websocket_endpoint(browser_ws: WebSocket):
                 current_user_id
             )
 
-        await dg_ws.close()
+        sessions.pop(session_id, None)
 
+        await dg_ws.close()
 
