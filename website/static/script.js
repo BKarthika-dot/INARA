@@ -9,7 +9,7 @@ let input;
 /* =======================
    🔊 AUDIO PLAYBACK
 ======================= */
-startInterview
+
 function playAudio(arrayBuffer) {
   if (!arrayBuffer || arrayBuffer.byteLength === 0) return;
 
@@ -28,7 +28,6 @@ function playNextChunk() {
   const buffer = audioQueue.shift();
   const pcm16 = new Int16Array(buffer);
 
-  // ✅ FIX: ACTUALLY STORE audioBuffer
   const audioBuffer = audioContext.createBuffer(
     1,
     pcm16.length,
@@ -36,6 +35,7 @@ function playNextChunk() {
   );
 
   const channelData = audioBuffer.getChannelData(0);
+
   for (let i = 0; i < pcm16.length; i++) {
     channelData[i] = pcm16[i] / 32768;
   }
@@ -44,9 +44,7 @@ function playNextChunk() {
   source.buffer = audioBuffer;
   source.connect(audioContext.destination);
 
-  source.onended = () => {
-    playNextChunk(); // 🔑 allows conversation to continue
-  };
+  source.onended = () => playNextChunk();
 
   source.start();
 }
@@ -63,6 +61,7 @@ function floatTo16BitPCM(float32) {
     const s = Math.max(-1, Math.min(1, float32[i]));
     view.setInt16(i * 2, s * 0x7fff, true);
   }
+
   return buffer;
 }
 
@@ -72,115 +71,166 @@ function floatTo16BitPCM(float32) {
 
 window.addEventListener("DOMContentLoaded", () => {
   document.getElementById("start").addEventListener("click", startInterview);
-  document.getElementById("stop").addEventListener("click",stopInterview);
+  document.getElementById("stop").addEventListener("click", stopInterview);
 });
 
 async function startInterview() {
+
   console.log("Start interview clicked");
 
-  // 🔥 FIX: Automatically use correct protocol + host
   const protocol = window.location.protocol === "https:" ? "wss" : "ws";
   const wsUrl = `${protocol}://${window.location.host}/ws`;
-
-  console.log("Connecting to:", wsUrl);
 
   socket = new WebSocket(wsUrl);
   socket.binaryType = "arraybuffer";
 
   socket.onopen = async () => {
+
     console.log("WebSocket connected");
 
     audioContext = new AudioContext({ sampleRate: 48000 });
     await audioContext.resume();
 
     try {
+
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
           channelCount: 1,
           echoCancellation: true,
           noiseSuppression: true,
-          autoGainControl: true,
-        },
+          autoGainControl: true
+        }
       });
 
       input = audioContext.createMediaStreamSource(stream);
-      processor = audioContext.createScriptProcessor(2048, 1, 1);
+
+      processor = audioContext.createScriptProcessor(4096, 1, 1);
+
       input.connect(processor);
 
-      // Silent sink (prevents echo loop)
       const zeroGain = audioContext.createGain();
       zeroGain.gain.value = 0;
+
       processor.connect(zeroGain);
       zeroGain.connect(audioContext.destination);
 
       let silenceFrames = 0;
-      const SILENCE_THRESHOLD = 0.002;
-      const MAX_SILENCE_FRAMES = 15;
+      let speechFrames = 0;
       let speaking = false;
 
+      const SILENCE_THRESHOLD = 0.002;
+      const MAX_SILENCE_FRAMES = 60;
+
       processor.onaudioprocess = (e) => {
+
         const inputData = e.inputBuffer.getChannelData(0);
 
-        let energy = 0;
-        for (let i = 0; i < inputData.length; i++) {
-          energy += Math.abs(inputData[i]);
+        if (!inputData || inputData.length === 0) return;
+
+        const pcm16 = floatTo16BitPCM(inputData);
+
+        /* ✅ ALWAYS SEND AUDIO */
+        if (socket && socket.readyState === WebSocket.OPEN) {
+          socket.send(pcm16);
         }
+
+        /* RMS energy */
+        let sum = 0;
+        for (let i = 0; i < inputData.length; i++) {
+          sum += inputData[i] * inputData[i];
+        }
+
+        const energy = Math.sqrt(sum / inputData.length);
 
         if (energy > SILENCE_THRESHOLD) {
-          speaking = true;
+
+          speechFrames++;
+
+          if (speechFrames > 3) {
+            speaking = true;
+          }
+
           silenceFrames = 0;
 
-          const pcm16 = floatTo16BitPCM(inputData);
-          socket.send(pcm16);
-          return;
-        }
+        } else {
 
-        if (speaking) {
-          silenceFrames++;
+          speechFrames = 0;
 
-          if (silenceFrames > MAX_SILENCE_FRAMES) {
-            socket.send(JSON.stringify({ type: "InputAudioEnd" }));
-            speaking = false;
-            silenceFrames = 0;
+          if (speaking) {
+            silenceFrames++;
           }
+
         }
+
+        /* Detect end of speech */
+
+        if (speaking && silenceFrames > MAX_SILENCE_FRAMES) {
+
+          console.log("Speech ended");
+
+          if (socket && socket.readyState === WebSocket.OPEN) {
+            socket.send(JSON.stringify({ type: "InputAudioEnd" }));
+          }
+
+          speaking = false;
+          silenceFrames = 0;
+          speechFrames = 0;
+        }
+
       };
 
     } catch (err) {
-      console.error("Microphone access denied or failed:", err);
+
+      console.error("Microphone access failed:", err);
       alert("Microphone permission is required.");
+
     }
+
   };
 
   socket.onmessage = (event) => {
+
     if (typeof event.data === "string") {
+
       console.log("Transcript:", event.data);
-      document.getElementById("output").textContent += event.data + "\n";
+
+      const output = document.getElementById("output");
+      if (output) {
+        output.textContent += event.data + "\n";
+      }
+
     } else {
+
       playAudio(event.data);
+
     }
+
   };
 
   socket.onerror = (e) => {
     console.error("WebSocket error:", e);
   };
 
-  socket.onclose = () => {
-    console.log("WebSocket closed");
+  socket.onclose = (event) => {
+    console.log("WebSocket closed:", event.code, event.reason);
   };
+
 }
+
+/* =======================
+   🛑 STOP INTERVIEW
+======================= */
+
 async function stopInterview() {
+
   console.log("Stopping interview...");
 
   if (!socket || socket.readyState !== WebSocket.OPEN) {
-    console.log("No active socket.");
     return;
   }
 
-  // 🔴 Tell backend to save transcript
   socket.send("STOP_INTERVIEW");
 
-  // Stop mic capture
   if (processor) {
     processor.disconnect();
     processor.onaudioprocess = null;
@@ -190,17 +240,15 @@ async function stopInterview() {
     input.disconnect();
   }
 
-  // Close audio context
   if (audioContext) {
     await audioContext.close();
   }
 
-  // Clear audio playback queue
   audioQueue = [];
   isPlaying = false;
 
-  // Close socket after slight delay
   setTimeout(() => {
     socket.close();
   }, 300);
+
 }

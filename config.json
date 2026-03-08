@@ -16,6 +16,7 @@
       "provider": {
         "type": "deepgram",
         "model": "nova-3",
+        "endpointing": 300,
         "keyterms": ["hello", "goodbye"]
       }
     },
