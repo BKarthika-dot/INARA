@@ -235,3 +235,61 @@ body {
         transform: scale(1);
     }
 }
+
+
+/* Hide default cursor */
+body {
+    cursor: none;
+}
+
+/* Core cursor dot */
+.neon-cursor {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 10px;
+    height: 10px;
+    background: #a855f7; /* purple */
+    border-radius: 50%;
+    pointer-events: none;
+    z-index: 9999;
+    transform: translate(-50%, -50%);
+}
+
+/* Glow effect */
+.neon-cursor-glow {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 40px;
+    height: 40px;
+    background: radial-gradient(circle, rgb(126, 6, 239) 0%, transparent 70%);
+    border-radius: 50%;
+    pointer-events: none;
+    z-index: 9998;
+    transform: translate(-50%, -50%);
+    filter: blur(6px);
+    transition: transform 0.1s ease-out;
+}
+
+.hover-grow {
+    display: inline-block; 
+    transition: transform 0.25s ease, color 0.25s ease;
+}
+
+.hover-grow:hover {
+    transform: scale(1.08);
+}
+
+/* Base styling */
+.letter-hover span {
+    display: inline-block;
+    transition: transform 0.3s ease, color 0.3s ease, text-shadow 0.3s ease;
+}
+
+/* Hover effect */
+.letter-hover:hover span {
+    transform: translateY(-8px) scale(1.1);
+    color: #a855f7;
+    text-shadow: 0 0 8px rgba(168, 85, 247, 0.7);
+}

@@ -1,5 +1,5 @@
 window.onerror = function(msg, url, line, col, error) {
-    console.error("GLOBAL ERROR:", msg, "at line", line);
+    alert("JS Error: "+msg);
 };
 
 /* =======================
@@ -122,6 +122,8 @@ async function startInterview() {
   const protocol = window.location.protocol === "https:" ? "wss" : "ws";
   const wsUrl = `${protocol}://${window.location.host}/ws`;
 
+  alert("WS URL:"+wsUrl);
+
   socket = new WebSocket(wsUrl);
   socket.binaryType = "arraybuffer";
 
@@ -129,6 +131,12 @@ async function startInterview() {
     console.log("WebSocket connected");
     audioContext = new AudioContext({ sampleRate: 48000 });
     await audioContext.resume();
+
+    const dummy=audioContext.createBuffer(1,1,22050);
+    const source=audioContext.createBufferSource();
+    source.buffer=dummy;
+    source.connect(audioContext.destination)
+    source.start();
 
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -244,3 +252,61 @@ async function stopInterview() {
 
   setTimeout(() => { socket.close(); }, 300);
 }
+
+
+
+const cursor = document.querySelector('.neon-cursor');
+const glow = document.querySelector('.neon-cursor-glow');
+
+let mouseX = 0;
+let mouseY = 0;
+
+let glowX = 0;
+let glowY = 0;
+
+// Track mouse
+document.addEventListener('mousemove', (e) => {
+    mouseX = e.clientX;
+    mouseY = e.clientY;
+
+    cursor.style.left = mouseX + 'px';
+    cursor.style.top = mouseY + 'px';
+});
+
+// Smooth trailing effect
+function animateGlow() {
+    glowX += (mouseX - glowX) * 0.15;
+    glowY += (mouseY - glowY) * 0.15;
+
+    glow.style.left = glowX + 'px';
+    glow.style.top = glowY + 'px';
+
+    requestAnimationFrame(animateGlow);
+}
+
+animateGlow();
+
+document.addEventListener("DOMContentLoaded", () => {
+
+    const elements = document.querySelectorAll('.letter-hover');
+
+    elements.forEach(el => {
+        const text = el.textContent;
+        el.innerHTML = '';
+
+        text.split('').forEach((char, index) => {
+            const span = document.createElement('span');
+            span.textContent = char;
+
+            // Preserve spaces
+            if (char === ' ') {
+                span.innerHTML = '&nbsp;';
+            }
+
+            span.style.transitionDelay = `${index * 0.03}s`;
+
+            el.appendChild(span);
+        });
+    });
+
+});
