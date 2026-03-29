@@ -1,42 +1,65 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
+  <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1.0">
-  <title>Interview Agent – Prototype</title>
-
-  <!-- Bootstrap CSS -->
-  <link
-    href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
-    rel="stylesheet"
-  >
-
+  <title>Dashboard | INARA</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="/static/style.css">
 </head>
 <body class="bg-light">
 
-  <div class="container py-5" style="text-align: center;">
+  <div class="container-fluid">
+    <div class="row vh-100 g-0">
 
-    <h2 class="mb-4">Interview Agent (Prototype)</h2>
-
-    <div class="mb-3">
-      <button id="start"  type="button" class="btn btn-primary">
-        Start Interview
-      </button>
-
-      <button id="stop"  type="button" class="btn btn-danger" >
-        Stop
-      </button>
-    </div>
-
-    <div class="card">
-      <div class="card-body">
-        <h5 class="card-title" style="color: #6c757d;">Transcript</h5>
-        <pre id="output" class="mb-0"></pre>
+      <div class="col-md-5 d-none d-md-flex bg-inara-muted flex-column align-items-center justify-content-center p-5">
+        <div class="text-center w-100">
+          <h1 class="display-3 fw-bold mb-1">INARA</h1>
+          <p class="fs-4 text-muted mb-2">Interview Session</p>
+          
+          <div class="avatar-container is-idle">
+            <svg class="ring-svg" viewBox="0 0 100 100" preserveAspectRatio="xMidYMid meet">
+              <circle 
+                cx="50" 
+                cy="50" 
+                r="47" 
+                fill="none" 
+                stroke="#6366f1" 
+                stroke-width="2" 
+                stroke-dasharray="10, 6" 
+                stroke-linecap="round"
+              />
+            </svg>
+            
+            <img src="/static/icon.png" id="interviewer-img" class="interviewer-icon shadow" alt="AI Interviewer">
+          </div>
+        </div>
       </div>
-    </div>
 
+      <div class="col-md-7 d-flex align-items-center justify-content-center inara-brand-purple">
+        <div style="width: 100%; max-width: 500px;" class="p-5 text-center">
+          
+          <div class="mb-5">
+            <h2 class="fw-bold mb-2">Ready to start?</h2>
+            <p class="text-muted">Click the button below to begin your AI-powered mock interview.</p>
+          </div>
+
+          <div class="d-grid gap-3">
+            <button id="start" type="button" class="btn btn-login btn-lg shadow-sm py-3">
+              <i class="bi bi-play-fill"></i> Start Interview
+            </button>
+
+            <button id="stop" type="button" class="btn btn-outline-danger btn-lg py-3 border-2">
+              End Session
+            </button>
+          </div>
+
+        </div>
+      </div>
+
+    </div>
   </div>
 
-  <script src="/static/script.js?v=2"></script>
+  <script src="/static/script.js"></script>
 </body>
 </html>

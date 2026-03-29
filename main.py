@@ -20,7 +20,7 @@ from bson import ObjectId
 # Interview session state
 # =========================
 
-MAX_QUESTIONS = 10
+MAX_QUESTIONS = 15
 sessions = {}
 
 load_dotenv()

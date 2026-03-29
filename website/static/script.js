@@ -1,3 +1,33 @@
+window.onerror = function(msg, url, line, col, error) {
+    console.error("GLOBAL ERROR:", msg, "at line", line);
+};
+
+/* =======================
+    🎨 ANIMATION MANAGER
+======================= */
+
+// Define globally at the top of the file
+window.setAvatarState = function(state) {
+    const box = document.querySelector('.avatar-container');
+
+    if (!box) {
+        console.error("Avatar container not found");
+        return;
+    }
+
+    console.log("STATE:", state);
+
+    box.classList.remove('is-talking', 'is-listening', 'is-idle');
+
+    if (state === 'talking') {
+        box.classList.add('is-talking');
+    } else if (state === 'listening') {
+        box.classList.add('is-listening');
+    } else {
+        box.classList.add('is-idle');
+    }
+};
+
 let audioQueue = [];
 let isPlaying = false;
 
@@ -6,77 +36,88 @@ let audioContext;
 let processor;
 let input;
 
+
 /* =======================
-   🔊 AUDIO PLAYBACK
+    🔊 AUDIO PLAYBACK
 ======================= */
 
 function playAudio(arrayBuffer) {
-  if (!arrayBuffer || arrayBuffer.byteLength === 0) return;
-
-  audioQueue.push(arrayBuffer);
-  if (!isPlaying) playNextChunk();
+    if (!arrayBuffer || arrayBuffer.byteLength === 0) return;
+    audioQueue.push(arrayBuffer);
+    if (!isPlaying) playNextChunk();
 }
 
 function playNextChunk() {
-  if (audioQueue.length === 0) {
-    isPlaying = false;
-    return;
-  }
+    if (!audioContext) {
+        console.error("AudioContext not initialized");
+        return;
+    }
 
-  isPlaying = true;
+    if (audioQueue.length === 0) {
+        isPlaying = false;
+        window.setAvatarState('listening');
+        return;
+    }
 
-  const buffer = audioQueue.shift();
-  const pcm16 = new Int16Array(buffer);
+    isPlaying = true;
+    window.setAvatarState('talking');
 
-  const audioBuffer = audioContext.createBuffer(
-    1,
-    pcm16.length,
-    48000
-  );
+    const buffer = audioQueue.shift();
+    const pcm16 = new Int16Array(buffer);
 
-  const channelData = audioBuffer.getChannelData(0);
+    try {
+        const audioBuffer = audioContext.createBuffer(1, pcm16.length, 48000);
+        const channelData = audioBuffer.getChannelData(0);
 
-  for (let i = 0; i < pcm16.length; i++) {
-    channelData[i] = pcm16[i] / 32768;
-  }
+        for (let i = 0; i < pcm16.length; i++) {
+            channelData[i] = pcm16[i] / 32768;
+        }
 
-  const source = audioContext.createBufferSource();
-  source.buffer = audioBuffer;
-  source.connect(audioContext.destination);
+        const source = audioContext.createBufferSource();
+        source.buffer = audioBuffer;
+        source.connect(audioContext.destination);
 
-  source.onended = () => playNextChunk();
+        source.onended = () => playNextChunk();
+        source.start();
 
-  source.start();
+    } catch (err) {
+        console.error("Audio playback error:", err);
+    }
 }
-
 /* =======================
-   🎙️ AUDIO CAPTURE
+    🎙️ AUDIO CAPTURE
 ======================= */
 
 function floatTo16BitPCM(float32) {
   const buffer = new ArrayBuffer(float32.length * 2);
   const view = new DataView(buffer);
-
   for (let i = 0; i < float32.length; i++) {
     const s = Math.max(-1, Math.min(1, float32[i]));
     view.setInt16(i * 2, s * 0x7fff, true);
   }
-
   return buffer;
 }
 
 /* =======================
-   🚀 MAIN
+    🚀 MAIN
 ======================= */
 
 window.addEventListener("DOMContentLoaded", () => {
-  document.getElementById("start").addEventListener("click", startInterview);
-  document.getElementById("stop").addEventListener("click", stopInterview);
+  window.setAvatarState('idle');
+  console.log("INARA Dashboard Ready");
+  
+  const startBtn = document.getElementById("start");
+  const stopBtn = document.getElementById("stop");
+
+  if (startBtn) startBtn.addEventListener("click", startInterview);
+  if (stopBtn) stopBtn.addEventListener("click", stopInterview);
 });
 
 async function startInterview() {
-
   console.log("Start interview clicked");
+  
+  // Reset UI state
+  window.setAvatarState('listening');
 
   const protocol = window.location.protocol === "https:" ? "wss" : "ws";
   const wsUrl = `${protocol}://${window.location.host}/ws`;
@@ -85,14 +126,11 @@ async function startInterview() {
   socket.binaryType = "arraybuffer";
 
   socket.onopen = async () => {
-
     console.log("WebSocket connected");
-
     audioContext = new AudioContext({ sampleRate: 48000 });
     await audioContext.resume();
 
     try {
-
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
           channelCount: 1,
@@ -103,14 +141,11 @@ async function startInterview() {
       });
 
       input = audioContext.createMediaStreamSource(stream);
-
       processor = audioContext.createScriptProcessor(4096, 1, 1);
-
       input.connect(processor);
 
       const zeroGain = audioContext.createGain();
       zeroGain.gain.value = 0;
-
       processor.connect(zeroGain);
       zeroGain.connect(audioContext.destination);
 
@@ -122,112 +157,78 @@ async function startInterview() {
       const MAX_SILENCE_FRAMES = 60;
 
       processor.onaudioprocess = (e) => {
-
         const inputData = e.inputBuffer.getChannelData(0);
-
         if (!inputData || inputData.length === 0) return;
 
         const pcm16 = floatTo16BitPCM(inputData);
-
-        /* ✅ ALWAYS SEND AUDIO */
         if (socket && socket.readyState === WebSocket.OPEN) {
           socket.send(pcm16);
         }
 
-        /* RMS energy */
         let sum = 0;
         for (let i = 0; i < inputData.length; i++) {
           sum += inputData[i] * inputData[i];
         }
-
         const energy = Math.sqrt(sum / inputData.length);
 
         if (energy > SILENCE_THRESHOLD) {
-
+          window.setAvatarState('listening');
           speechFrames++;
-
-          if (speechFrames > 3) {
-            speaking = true;
-          }
-
+          if (speechFrames > 3) speaking = true;
           silenceFrames = 0;
-
         } else {
-
           speechFrames = 0;
-
-          if (speaking) {
-            silenceFrames++;
-          }
-
+          if (speaking) silenceFrames++;
         }
 
-        /* Detect end of speech */
-
         if (speaking && silenceFrames > MAX_SILENCE_FRAMES) {
-
           console.log("Speech ended");
-
           if (socket && socket.readyState === WebSocket.OPEN) {
             socket.send(JSON.stringify({ type: "InputAudioEnd" }));
           }
-
           speaking = false;
           silenceFrames = 0;
           speechFrames = 0;
         }
-
       };
 
     } catch (err) {
-
       console.error("Microphone access failed:", err);
       alert("Microphone permission is required.");
-
     }
-
   };
 
   socket.onmessage = (event) => {
-
     if (typeof event.data === "string") {
+        console.log("Transcript:", event.data);
 
-      console.log("Transcript:", event.data);
+        try {
+            const data = JSON.parse(event.data);
 
-      const output = document.getElementById("output");
-      if (output) {
-        output.textContent += event.data + "\n";
-      }
+            if (data.type === "ConversationText" && data.role === "assistant") {
+                window.setAvatarState('talking');
+            }
 
-    } else {
-
+        } catch (e) {}
+    }else {
+      console.log("Audio chunk received");
       playAudio(event.data);
-
     }
-
   };
 
-  socket.onerror = (e) => {
-    console.error("WebSocket error:", e);
-  };
-
-  socket.onclose = (event) => {
-    console.log("WebSocket closed:", event.code, event.reason);
-  };
-
+  socket.onerror = (e) => console.error("WebSocket error:", e);
+  socket.onclose = () => window.setAvatarState('idle');
 }
 
 /* =======================
-   🛑 STOP INTERVIEW
+    🛑 STOP INTERVIEW
 ======================= */
 
 async function stopInterview() {
-
   console.log("Stopping interview...");
+  window.setAvatarState('idle');
 
-  if (!socket || socket.readyState !== WebSocket.OPEN) {
-    return;
-  }
+  if (!socket || socket.readyState !== WebSocket.OPEN) return;
 
   socket.send("STOP_INTERVIEW");
 
@@ -235,20 +236,11 @@ async function stopInterview() {
     processor.disconnect();
     processor.onaudioprocess = null;
   }
-
-  if (input) {
-    input.disconnect();
-  }
-
-  if (audioContext) {
-    await audioContext.close();
-  }
+  if (input) input.disconnect();
+  if (audioContext) await audioContext.close();
 
   audioQueue = [];
   isPlaying = false;
 
-  setTimeout(() => {
-    socket.close();
-  }, 300);
-
+  setTimeout(() => { socket.close(); }, 300);
 }
