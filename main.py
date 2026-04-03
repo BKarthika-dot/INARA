@@ -20,7 +20,7 @@ from website.security import SECRET_KEY as JWT_SECRET
 # =========================
 
 
-MAX_QUESTIONS = 5
+MAX_QUESTIONS = 30
 sessions = {}
 
 load_dotenv()
