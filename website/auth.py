@@ -31,7 +31,7 @@ async def signup(
 
     token = create_access_token({"sub": str(result.inserted_id)})
 
-    response = RedirectResponse("/dashboard", status_code=302)
+    response = RedirectResponse("/role", status_code=302)
     response.set_cookie("access_token", token, httponly=True)
 
     return response
@@ -52,7 +52,7 @@ async def login(
 
     token = create_access_token({"sub": str(user["_id"])})
 
-    response = RedirectResponse("/dashboard", status_code=302)
+    response = RedirectResponse("/role", status_code=302)
     response.set_cookie("access_token", token, httponly=True)
 
     return response

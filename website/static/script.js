@@ -115,29 +115,38 @@ window.addEventListener("DOMContentLoaded", () => {
 
 async function startInterview() {
   console.log("Start interview clicked");
-  
-  // Reset UI state
+
   window.setAvatarState('listening');
 
   const protocol = window.location.protocol === "https:" ? "wss" : "ws";
   const wsUrl = `${protocol}://${window.location.host}/ws`;
-
-  alert("WS URL:"+wsUrl);
 
   socket = new WebSocket(wsUrl);
   socket.binaryType = "arraybuffer";
 
   socket.onopen = async () => {
     console.log("WebSocket connected");
+
+    // 🎯 INIT AUDIO CONTEXT
     audioContext = new AudioContext({ sampleRate: 48000 });
     await audioContext.resume();
 
-    const dummy=audioContext.createBuffer(1,1,22050);
-    const source=audioContext.createBufferSource();
-    source.buffer=dummy;
-    source.connect(audioContext.destination)
+    // 🎯 SEND ROLE (FIXED)
+    const role = localStorage.getItem("selected_role") || "web_developer";
+
+    socket.send(JSON.stringify({
+      type: "ROLE",
+      role: role
+    }));
+
+    // 🎯 UNLOCK AUDIO (mobile fix)
+    const dummy = audioContext.createBuffer(1, 1, 22050);
+    const source = audioContext.createBufferSource();
+    source.buffer = dummy;
+    source.connect(audioContext.destination);
     source.start();
 
+    // 🎯 MIC ACCESS
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
@@ -150,10 +159,12 @@ async function startInterview() {
 
       input = audioContext.createMediaStreamSource(stream);
       processor = audioContext.createScriptProcessor(4096, 1, 1);
+
       input.connect(processor);
 
       const zeroGain = audioContext.createGain();
       zeroGain.gain.value = 0;
+
       processor.connect(zeroGain);
       zeroGain.connect(audioContext.destination);
 
@@ -169,7 +180,8 @@ async function startInterview() {
         if (!inputData || inputData.length === 0) return;
 
         const pcm16 = floatTo16BitPCM(inputData);
-        if (socket && socket.readyState === WebSocket.OPEN) {
+
+        if (socket.readyState === WebSocket.OPEN) {
           socket.send(pcm16);
         }
 
@@ -191,9 +203,11 @@ async function startInterview() {
 
         if (speaking && silenceFrames > MAX_SILENCE_FRAMES) {
           console.log("Speech ended");
-          if (socket && socket.readyState === WebSocket.OPEN) {
+
+          if (socket.readyState === WebSocket.OPEN) {
             socket.send(JSON.stringify({ type: "InputAudioEnd" }));
           }
+
           speaking = false;
           silenceFrames = 0;
           speechFrames = 0;
@@ -207,52 +221,85 @@ async function startInterview() {
   };
 
   socket.onmessage = (event) => {
+
     if (typeof event.data === "string") {
-        console.log("Transcript:", event.data);
 
         try {
             const data = JSON.parse(event.data);
 
+            // ✅ Handle END INTERVIEW
+            if (data.type === "END_INTERVIEW") {
+              console.log("Interview ending — waiting for closing message to finish...");
+
+              // ✅ Stop sending mic audio immediately
+              if (processor) {
+                  processor.disconnect();
+                  processor.onaudioprocess = null;
+              }
+              if (input) input.disconnect();
+
+              // ✅ Poll until Deepgram finishes speaking the closing message
+              const checkDone = setInterval(() => {
+                  if (!isPlaying && audioQueue.length === 0) {
+                      clearInterval(checkDone);
+
+                      if (audioContext && audioContext.state !== "closed") {
+                          audioContext.close();
+                      }
+
+                      audioQueue = [];
+                      isPlaying = false;
+                      window.setAvatarState('idle');
+
+                      setTimeout(() => { window.location.href = "/evaluation"; }, 600);
+                  }
+              }, 300);
+
+              return;
+          }
+            // Normal conversation
             if (data.type === "ConversationText" && data.role === "assistant") {
                 window.setAvatarState('talking');
             }
 
-        } catch (e) {}
-    }else {
-      console.log("Audio chunk received");
-      playAudio(event.data);
+        } catch (e) {
+            console.log("Non-JSON text:", event.data);
+        }
+
+    } else {
+        playAudio(event.data);
     }
-  };
+};
 
   socket.onerror = (e) => console.error("WebSocket error:", e);
-  socket.onclose = () => window.setAvatarState('idle');
-}
 
+  socket.onclose = () => {
+    console.log("WebSocket closed");
+    window.setAvatarState('idle');
+  };
+}
 /* =======================
     🛑 STOP INTERVIEW
 ======================= */
 
 async function stopInterview() {
-  console.log("Stopping interview...");
-  window.setAvatarState('idle');
+    console.log("Stop button clicked");
+    window.setAvatarState('idle');
 
-  if (!socket || socket.readyState !== WebSocket.OPEN) return;
+    // If socket is already closed (e.g. called from END_INTERVIEW handler), just navigate
+    if (!socket || socket.readyState !== WebSocket.OPEN) {
+        setTimeout(() => { window.location.href = "/evaluation"; }, 600);
+        return;
+    }
 
-  socket.send("STOP_INTERVIEW");
+    // Send signal to backend — it will inject the closing message,
+    // save the transcript, then reply with END_INTERVIEW
+    socket.send("STOP_INTERVIEW");
 
-  if (processor) {
-    processor.disconnect();
-    processor.onaudioprocess = null;
-  }
-  if (input) input.disconnect();
-  if (audioContext) await audioContext.close();
-
-  audioQueue = [];
-  isPlaying = false;
-
-  setTimeout(() => { socket.close(); }, 300);
+    // ⚠️ Don't tear down audio or navigate here.
+    // The END_INTERVIEW handler in socket.onmessage takes over from here,
+    // waits for the closing message audio to finish, then navigates.
 }
-
 
 
 const cursor = document.querySelector('.neon-cursor');
@@ -309,4 +356,20 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     });
 
+});
+document.querySelectorAll(".role-btn").forEach(btn => {
+  btn.addEventListener("click", () => {
+    const role = btn.getAttribute("data-role");
+
+    
+    localStorage.setItem("selected_role", role);
+
+    alert("Role selected: " + role);
+  });
+});
+// Highlight current page in navbar
+document.querySelectorAll(".nav-link-item").forEach(link => {
+    if (link.getAttribute("href") === window.location.pathname) {
+        link.classList.add("active");
+    }
 });

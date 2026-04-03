@@ -1,0 +1,147 @@
+/* --- Inara Style Evaluation --- */
+
+.rings-container {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 30px;
+    margin-top: 20px;
+}
+
+.ring-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 180px;
+    padding: 25px !important;
+    text-align: center;
+}
+
+.ring-card.big {
+    width: 240px;
+    border: 2px solid #6366f1; /* Highlight the overall score */
+}
+
+.ring-wrapper {
+    position: relative;
+    width: 100%;
+}
+
+svg {
+    transform: rotate(-90deg);
+    width: 100%;
+    height: auto;
+}
+
+circle {
+    fill: none;
+    stroke-width: 8;
+    stroke-linecap: round;
+}
+
+.bg {
+    stroke: #e2e8f0; /* Muted light grey/blue */
+}
+
+.progress {
+    stroke: #10b981; /* Default to success green */
+    stroke-dasharray: 283; /* 2 * PI * R (45) */
+    stroke-dashoffset: 283;
+    transition: stroke-dashoffset 1.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Overall ring uses the brand Indigo */
+.progress.primary {
+    stroke: #6366f1;
+    stroke-dasharray: 264; /* 2 * PI * R (42) */
+    stroke-dashoffset: 264;
+    stroke-width: 10;
+}
+
+.score {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 1.5rem;
+    color: #1e293b;
+}
+
+.ring-card.big .score {
+    font-size: 2.2rem;
+    color: #4c1d95; /* Brand purple */
+}
+
+.feedback-section {
+    border: 1px solid #e1e8f0;
+    max-width: 900px;
+    margin: 0 auto;
+}
+
+#feedback-text {
+    color: #4b5563;
+    line-height: 1.8;
+}
+
+/* --- Inara Report Styles --- */
+
+.stat-card {
+    background: #ffffff !important; /* Pure white cards on light blue background */
+    border: 1px solid #e1e8f0;
+    border-radius: 16px;
+    padding: 1.5rem 2rem;
+    text-align: center;
+    transition: transform 0.2s ease;
+}
+
+.stat-card:hover {
+    transform: translateY(-5px);
+}
+
+.stat-number {
+    font-size: 2.8rem;
+    font-weight: 700;
+    line-height: 1;
+    color: #4c1d95; /* Inara Deep Purple */
+}
+
+.text-indigo { color: #6366f1; }
+.text-success { color: #10b981; }
+
+.stat-label {
+    font-size: 0.9rem;
+    color: #64748b;
+    font-weight: 600;
+    margin-top: 0.8rem;
+}
+
+/* Toggle Buttons - Inara Palette */
+.toggle-btn {
+    padding: 0.5rem 1.2rem;
+    border-radius: 50px;
+    border: 1px solid #e2e8f0;
+    background: #f8fafc;
+    color: #64748b;
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.toggle-btn.active {
+    color: white !important;
+    border-color: transparent;
+}
+
+/* Specific Active Colors for the Chart Lines */
+.toggle-btn.overall.active     { background: #6366f1; } /* Indigo */
+.toggle-btn.clarity.active     { background: #7c6ef2; } /* Purple */
+.toggle-btn.confidence.active  { background: #10b981; } /* Green */
+.toggle-btn.conciseness.active { background: #f59e0b; } /* Amber */
+.toggle-btn.technical.active   { background: #e05c7a; } /* Rose */
+
+#chart-container {
+    position: relative;
+    height: 380px;
+    width: 100%;
+}

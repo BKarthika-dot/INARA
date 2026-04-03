@@ -40,11 +40,30 @@ async def signup_page(request: Request):
         }
     )
 
-
-
 @router.get("/dashboard", response_class=HTMLResponse)
 async def dashboard(request: Request):
+    role=request.cookies.get("selected_role")
     return templates.TemplateResponse(
         "dashboard.html",
         {"request": request}
     )
+
+@router.get("/role", response_class=HTMLResponse)
+async def role_page(request: Request):
+    return templates.TemplateResponse(
+        "role.html",
+        {"request": request}
+    )
+
+
+from fastapi.responses import JSONResponse
+
+@router.post("/set-role")
+async def set_role(request: Request):
+    data = await request.json()
+    role = data.get("role")
+
+    response = JSONResponse({"message": "Role saved"})
+    response.set_cookie("selected_role", role)
+
+    return response

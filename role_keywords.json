@@ -1,0 +1,35 @@
+{
+  "web_developer": [
+    "html", "css", "javascript", "react", "node", "api", "frontend", "backend", 
+    "database", "http", "rest", "typescript", "framework", "component", "state management", 
+    "redux", "hooks", "dom", "browser", "v8", "asynchronous", "promises", "event loop", 
+    "middleware", "express", "sql", "nosql", "mongodb", "authentication", "jwt", 
+    "oauth", "cors", "security", "xss", "performance", "optimization", "caching", 
+    "git", "version control", "ci/cd", "deployment", "docker", "unit testing", "jest"
+  ],
+  "ai_ml_engineer": [
+    "machine learning", "model", "training", "dataset", "neural network", "deep learning", 
+    "python", "classification", "regression", "tensorflow", "pytorch", "keras", 
+    "scikit-learn", "algorithm", "techniques", "shap", "explainability", 
+    "interpretability", "causal analysis", "black box", "data analysis", 
+    "feature engineering", "overfitting", "underfitting", "regularization", 
+    "gradient descent", "backpropagation", "cnn", "rnn", "lstm", "transformer", 
+    "nlp", "computer vision", "hyperparameter", "tuning", "validation", 
+    "cross-validation", "precision", "recall", "f1-score", "auc-roc", "deployment", "mlops"
+  ],
+  "sap_developer": [
+    "sap", "abap", "erp", "hana", "module", "business process", "sapui5", "fiori", 
+    "odata", "cds views", "dictionary", "report", "smartforms", "adobe forms", 
+    "badi", "user exit", "enhancement", "rfc", "bapi", "idoc", "integration", 
+    "cloud platform", "btp", "workflow", "debugging", "transport", "stms", 
+    "performance tuning", "code inspector", "hana studio", "eclipse", "rap", "cap"
+  ],
+  "data_analyst": [
+    "sql", "excel", "data", "analysis", "visualization", "dashboard", "statistics", 
+    "python", "pandas", "numpy", "powerbi", "tableau", "cleaning", "wrangling", 
+    "etl", "bi", "reporting", "pivots", "vlookup", "correlation", "distribution", 
+    "hypothesis testing", "p-value", "outliers", "trends", "forecasting", 
+    "storytelling", "stakeholder", "bigquery", "snowflake", "matplotlib", "seaborn",
+    "aggregations", "joins", "subqueries", "window functions"
+  ]
+}

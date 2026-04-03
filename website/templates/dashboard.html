@@ -9,28 +9,27 @@
 </head>
 <body class="bg-light">
 
-  <div class="container-fluid">
-    <div class="row vh-100 g-0">
+  {% include "navbar.html" %}
+
+  <div class="container-fluid p-0">
+    <div class="row g-0" style="height: calc(100vh - 60px);">  <!-- ← subtract navbar height -->
 
       <div class="col-md-5 d-none d-md-flex bg-inara-muted flex-column align-items-center justify-content-center p-5">
         <div class="text-center w-100">
           <h1 class="display-3 fw-bold mb-1 letter-hover">INARA</h1>
           <p class="fs-4 text-muted mb-2 hover-grow">Interview Session</p>
-          
+
           <div class="avatar-container is-idle">
             <svg class="ring-svg" viewBox="0 0 100 100" preserveAspectRatio="xMidYMid meet">
-              <circle 
-                cx="50" 
-                cy="50" 
-                r="47" 
-                fill="none" 
-                stroke="#6366f1" 
-                stroke-width="2" 
-                stroke-dasharray="10, 6" 
+              <circle
+                cx="50" cy="50" r="47"
+                fill="none"
+                stroke="#6366f1"
+                stroke-width="2"
+                stroke-dasharray="10, 6"
                 stroke-linecap="round"
               />
             </svg>
-            
             <img src="/static/icon.png" id="interviewer-img" class="interviewer-icon shadow" alt="AI Interviewer">
           </div>
         </div>
@@ -38,7 +37,7 @@
 
       <div class="col-md-7 d-flex align-items-center justify-content-center inara-brand-purple">
         <div style="width: 100%; max-width: 500px;" class="p-5 text-center">
-          
+
           <div class="mb-5">
             <h2 class="fw-bold mb-2 letter-hover">Ready to start?</h2>
             <p class="text-muted">Click the button below to begin your AI-powered mock interview.</p>
@@ -46,9 +45,8 @@
 
           <div class="d-grid gap-3">
             <button id="start" type="button" class="btn btn-login btn-lg shadow-sm py-3">
-              <i class="bi bi-play-fill"></i> Start Interview
+              Start Interview
             </button>
-
             <button id="stop" type="button" class="btn btn-outline-danger btn-lg py-3 border-2">
               End Session
             </button>
@@ -59,6 +57,7 @@
 
     </div>
   </div>
+
   <div class="neon-cursor"></div>
   <div class="neon-cursor-glow"></div>
   <script src="/static/script.js"></script>

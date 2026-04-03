@@ -5,19 +5,16 @@ body {
     color: #333;
     background-color: #f8f9fa;
 }
-
 .container {
     max-width: 1200px;
     margin: 0 auto;
     padding: 20px;
 }
-
 /* --- 2. Inara Brand Color Palette --- */
 
-
 .inara-brand-purple {
-    background-color: #f5f3ff !important; /* Very soft lavender */
-    color: #4c1d95 !important; /* Deep purple text for contrast */
+    background-color: #d7b1ef5d !important; /* Very soft lavender */
+    color: #3a0cc5 !important; /* Deep purple text for contrast */
 }
 
 /* Maya Blue (Sidebars/Accents) */
@@ -249,7 +246,7 @@ body {
     left: 0;
     width: 10px;
     height: 10px;
-    background: #a855f7; /* purple */
+    background: #7909e3; /* purple */
     border-radius: 50%;
     pointer-events: none;
     z-index: 9999;
@@ -263,7 +260,7 @@ body {
     left: 0;
     width: 40px;
     height: 40px;
-    background: radial-gradient(circle, rgb(126, 6, 239) 0%, transparent 70%);
+    background: radial-gradient(circle, rgb(95, 6, 239) 0%, transparent 70%);
     border-radius: 50%;
     pointer-events: none;
     z-index: 9998;
@@ -292,4 +289,79 @@ body {
     transform: translateY(-8px) scale(1.1);
     color: #a855f7;
     text-shadow: 0 0 8px rgba(168, 85, 247, 0.7);
+}
+/* --- Navbar --- */
+/* --- Navbar --- */
+.inara-navbar {
+    position: sticky;
+    top: 0;
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 2rem;
+    height: 60px;
+    width: 100%;
+    box-sizing: border-box;
+    background: rgba(255, 255, 255, 0.75);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-bottom: 1px solid rgba(99, 102, 241, 0.2);
+    box-shadow: 0 2px 12px rgba(99, 102, 241, 0.08);
+}
+
+.inara-brand {
+    font-size: 1.3rem;
+    font-weight: 700;
+    color: #6366f1;
+    text-decoration: none;
+    letter-spacing: 0.08em;
+    flex-shrink: 0;
+}
+
+.inara-brand:hover { color: #5b21b6; }
+
+.inara-nav-links {
+    display: flex;
+    flex-direction: row;        /* ← force horizontal */
+    align-items: center;
+    gap: 0.25rem;
+    flex-wrap: nowrap;          /* ← never wrap to next line */
+}
+
+.nav-link-item {
+    display: flex;
+    flex-direction: row;        /* ← icon + text side by side */
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.4rem 0.9rem;
+    border-radius: 8px;
+    font-size: 0.88rem;
+    font-weight: 500;
+    color: #1e293b;
+    text-decoration: none;
+    white-space: nowrap;        /* ← never break link text */
+    transition: background 0.2s ease, color 0.2s ease;
+}
+
+.nav-link-item:hover {
+    background-color: rgba(99, 102, 241, 0.1);
+    color: #6366f1;
+}
+
+.nav-link-item.active {
+    background-color: rgba(99, 102, 241, 0.12);
+    color: #6366f1;
+}
+
+.nav-logout {
+    color: #ef4444;
+    margin-left: 0.75rem;
+    border-left: 1px solid rgba(0,0,0,0.08);
+    padding-left: 1rem;
+}
+
+.nav-logout:hover {
+    background-color: rgba(239, 68, 68, 0.08);
+    color: #dc2626;
 }
