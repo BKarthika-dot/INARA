@@ -30,6 +30,8 @@
     "etl", "bi", "reporting", "pivots", "vlookup", "correlation", "distribution", 
     "hypothesis testing", "p-value", "outliers", "trends", "forecasting", 
     "storytelling", "stakeholder", "bigquery", "snowflake", "matplotlib", "seaborn",
-    "aggregations", "joins", "subqueries", "window functions"
+    "aggregations", "joins", "subqueries", "window functions","precision", "recall", "f1-score", "auc-roc",
+    "nlp","hyperparameter","tuning"
+
   ]
 }

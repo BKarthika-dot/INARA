@@ -253,7 +253,7 @@ async def websocket_endpoint(browser_ws: WebSocket):
     finally:
         if transcript_buffer and not transcript_saved:
             print("Connection closed — saving transcript")
-            role = browser_ws.cookies.get("selected_role", "web_developer")  # ✅ was missing
+            role = browser_ws.cookies.get("selected_role", "web_developer") 
             await process_interview(transcript_buffer, role, current_user_id)
 
         sessions.pop(session_id, None)
