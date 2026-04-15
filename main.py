@@ -102,51 +102,52 @@ ROLE_KEYWORDS = load_role_keywords()
 # =========================
 
 async def process_interview(transcript: str, role: str, user_id=None):
+    user_lines = [l for l in transcript.split("\n") if l.startswith("USER:")]
+    user_words = sum(len(l.replace("USER:", "").split()) for l in user_lines)
+
+    if not user_lines or user_words < 10:
+        print("⚠️ Skipping save — no meaningful user responses")
+        return
 
     try:
         result = await interviews_collection.insert_one({
             "user_id": ObjectId(user_id) if user_id else None,
             "transcript": transcript,
-            "role": role,  # ✅ IMPORTANT
+            "role": role,
             "created_at": datetime.utcnow()
         })
-
         print("✅ Interview saved:", result.inserted_id)
-
     except Exception as e:
         print("❌ Error saving interview:", e)
 
-# =========================
-# WebSocket endpoint
-# =========================
 
 @app.websocket("/ws")
 async def websocket_endpoint(browser_ws: WebSocket):
-
     await browser_ws.accept()
+
     current_user_id = get_user_id_from_ws(browser_ws)
-    print("WS user_id:", current_user_id) 
+    print("WS user_id:", current_user_id)
+
+    # ✅ Warn immediately if user_id is missing
+    if not current_user_id:
+        print("⚠️ WARNING: No user_id decoded from token — interview won't be linked to user")
 
     dg_ws = await sts_connect()
-
     config = load_config()
 
     transcript_buffer = ""
     transcript_saved = False
-
     session_id = id(browser_ws)
 
     sessions[session_id] = {
         "role": None,
         "question_count": 0,
-        "transcript": ""
     }
 
     await dg_ws.send(json.dumps(config))
 
-
     async def browser_handler():
-        nonlocal transcript_buffer, transcript_saved, current_user_id
+        nonlocal transcript_buffer, transcript_saved
 
         while True:
             msg = await browser_ws.receive()
@@ -156,25 +157,21 @@ async def websocket_endpoint(browser_ws: WebSocket):
                 break
 
             if msg.get("text") == "STOP_INTERVIEW":
-                print("Stopping interview")
+                print("Stop received")
 
-                # ✅ Inject closing message into Deepgram so the AI speaks it
-                closing_injection = {
+                await dg_ws.send(json.dumps({
                     "type": "InjectAgentMessage",
                     "message": "Thank you for your time and cooperation. That concludes our interview today. Your evaluation will be processed shortly. Best of luck!"
-                }
-                await dg_ws.send(json.dumps(closing_injection))
+                }))
 
-                # ✅ Save transcript
                 if transcript_buffer and not transcript_saved:
                     role = browser_ws.cookies.get("selected_role", "web_developer")
                     await process_interview(transcript_buffer, role, current_user_id)
                     transcript_saved = True
 
-                # ✅ Signal frontend to wait for audio then navigate
                 await browser_ws.send_text(json.dumps({
                     "type": "END_INTERVIEW",
-                    "message": "Thank you for your time and cooperation. That concludes the interview!"
+                    "message": "Thank you! Your evaluation will be processed shortly."
                 }))
 
                 await browser_ws.close()
@@ -188,17 +185,13 @@ async def websocket_endpoint(browser_ws: WebSocket):
                 await dg_ws.send(audio)
 
     async def deepgram_handler():
-
-        nonlocal transcript_buffer
+        nonlocal transcript_buffer, transcript_saved
 
         async for msg in dg_ws:
-
             if isinstance(msg, str):
-
                 data = json.loads(msg)
 
                 if data.get("type") == "ConversationText":
-
                     role = data.get("role")
                     content = data.get("content", "").strip()
 
@@ -206,140 +199,176 @@ async def websocket_endpoint(browser_ws: WebSocket):
                         continue
 
                     transcript_buffer += f"{role.upper()}: {content}\n"
-
                     session = sessions.get(session_id)
 
-                    # Detect candidate role from first user message
                     if role == "user" and session["role"] is None:
                         session["role"] = content.lower().strip()
                         print("Detected role:", session["role"])
 
-                    # Count interviewer questions
                     if role == "assistant" and "?" in content:
-
                         session["question_count"] += 1
                         print("Question count:", session["question_count"])
 
                         if session["question_count"] >= MAX_QUESTIONS:
                             print("Max questions reached — ending interview")
 
-                            # ✅ Save transcript BEFORE signalling the frontend
                             if transcript_buffer and not transcript_saved:
-                                role = browser_ws.cookies.get("selected_role", "web_developer")
-                                await process_interview(transcript_buffer, role, current_user_id)
+                                selected_role = browser_ws.cookies.get("selected_role", "web_developer")
+                                await process_interview(transcript_buffer, selected_role, current_user_id)
                                 transcript_saved = True
 
                             await browser_ws.send_text(json.dumps({
                                 "type": "END_INTERVIEW",
-                                "message": "Thank you for your time and cooperation. That concludes the interview! Your evaluation will be processed shortly."
+                                "message": "Thank you! That concludes the interview."
                             }))
-
                             return
 
             elif isinstance(msg, bytes):
                 await browser_ws.send_bytes(msg)
 
-
     try:
-
-        await asyncio.gather(
-            browser_handler(),
-            deepgram_handler(),
-        )
-
+        await asyncio.gather(browser_handler(), deepgram_handler())
     except Exception as e:
         print("WebSocket error:", e)
-
     finally:
-        if transcript_buffer and not transcript_saved:
-            print("Connection closed — saving transcript")
-            role = browser_ws.cookies.get("selected_role", "web_developer") 
-            await process_interview(transcript_buffer, role, current_user_id)
+        # ✅ Only save in finally if there are actual user responses
+        # and it hasn't been saved yet
+        user_lines = [l for l in transcript_buffer.split("\n") if l.startswith("USER:")]
+        if transcript_buffer and not transcript_saved and len(user_lines) >= 2:
+            print("Finally block — saving transcript")
+            selected_role = browser_ws.cookies.get("selected_role", "web_developer")
+            await process_interview(transcript_buffer, selected_role, current_user_id)
 
         sessions.pop(session_id, None)
-        await dg_ws.close()
+        try:
+            await dg_ws.close()
+        except Exception:
+            pass
+
 
 #interview evaluation
 def evaluate_transcript_advanced(transcript: str, role: str):
 
-    transcript_lower = transcript.lower()
-    words = transcript_lower.split()
+    # Extract ONLY user lines — ignore ASSISTANT: lines entirely
+    user_lines = [
+        line.replace("USER:", "").strip()
+        for line in transcript.split("\n")
+        if line.startswith("USER:")
+    ]
+
+    if not user_lines:
+        return None  # no user responses at all
+
+    user_text = " ".join(user_lines)
+    user_text_lower = user_text.lower()
+    words = user_text_lower.split()
     word_count = len(words)
-    sentences = transcript.count("\n")
+    num_responses = len(user_lines)
+
+    print(f"User word count: {word_count}, User responses: {num_responses}")
+
+    #  Reject if user barely spoke
+    if word_count < 30 or num_responses < 2:
+        return None
 
     # ======================
-    # 🎯 CLARITY
+    # CLARITY
+    # based on avg words per response — too short or too long = unclear
     # ======================
-    avg_sentence_length = word_count / max(sentences, 1)
+    avg_words_per_response = word_count / num_responses
 
-    if avg_sentence_length < 8:
+    if 10 <= avg_words_per_response <= 60:
         clarity = 8
-    elif avg_sentence_length < 15:
+    elif 6 <= avg_words_per_response < 10 or 60 < avg_words_per_response <= 90:
         clarity = 6
     else:
         clarity = 4
 
     # ======================
-    # 🎯 CONFIDENCE
+    # CONFIDENCE
+    # filler words in user text only
     # ======================
-    fillers = ["uh", "um", "maybe", "i think", "kind of"]
-    filler_count = sum(transcript_lower.count(f) for f in fillers)
+    fillers = ["uh", "um", "maybe", "i think", "kind of", "sort of", "you know", "like i"]
+    filler_count = sum(user_text_lower.count(f) for f in fillers)
+    filler_rate = filler_count / max(num_responses, 1)
 
-    confidence = max(10 - filler_count, 3)
+    if filler_rate < 0.5:
+        confidence = 9
+    elif filler_rate < 1.5:
+        confidence = 7
+    elif filler_rate < 3:
+        confidence = 5
+    else:
+        confidence = 3
 
     # ======================
-    # 🎯 CONCISENESS
+    # CONCISENESS
+    # penalise very short AND very long responses
     # ======================
-    if word_count < 50:
+    if 20 <= avg_words_per_response <= 80:
         conciseness = 8
-    elif word_count < 150:
+    elif 10 <= avg_words_per_response < 20 or 80 < avg_words_per_response <= 120:
         conciseness = 6
     else:
         conciseness = 4
 
     # ======================
-    # 🎯 TECHNICAL SCORE
+    # TECHNICAL
+    # keyword hits scaled to interview length
     # ======================
     keywords = ROLE_KEYWORDS.get(role, [])
-    keyword_hits = sum(1 for kw in keywords if kw in transcript_lower)
+    keyword_hits = sum(1 for kw in keywords if kw in user_text_lower)
+    keyword_rate = keyword_hits / max(num_responses, 1)
 
-    if keyword_hits >= 6:
+    if keyword_rate >= 1.5:
         technical = 9
-    elif keyword_hits >= 3:
+    elif keyword_rate >= 0.8:
         technical = 7
-    elif keyword_hits >= 1:
+    elif keyword_rate >= 0.3:
         technical = 5
     else:
         technical = 3
 
     # ======================
-    # 🎯 STRUCTURE SCORE
+    # OVERALL
     # ======================
-    structured = transcript.count(":")  # USER: / ASSISTANT:
-    structure_score = min(structured, 10)
+    overall = round((clarity + confidence + conciseness + technical) / 4)
 
     # ======================
-    # 🎯 OVERALL
+    # FEEDBACK
     # ======================
-    overall = int((clarity + confidence + conciseness + technical) / 4)
+    feedback_parts = []
 
-    feedback = f"""
-    Clarity: {'Good' if clarity > 6 else 'Needs improvement'}.
-    Confidence: {'Strong' if confidence > 6 else 'Moderate'}.
-    Technical depth: {'Strong' if technical > 7 else 'Basic'}.
-    Try to include more domain-specific terms and structured answers.
-    """
+    if clarity >= 7:
+        feedback_parts.append("Your responses were clear and well-paced.")
+    else:
+        feedback_parts.append("Try to keep your answers more focused — aim for 2-3 sentences per point.")
+
+    if confidence >= 7:
+        feedback_parts.append("You came across as confident and assertive.")
+    else:
+        feedback_parts.append("Reduce filler words like 'um', 'uh', and 'I think' to sound more confident.")
+
+    if conciseness >= 7:
+        feedback_parts.append("Good balance between detail and brevity.")
+    else:
+        feedback_parts.append("Work on structuring answers — use the STAR method for behavioural questions.")
+
+    if technical >= 7:
+        feedback_parts.append(f"Strong use of domain-specific terminology for the {role.replace('_', ' ')} role.")
+    else:
+        feedback_parts.append(f"Include more technical keywords relevant to {role.replace('_', ' ')} in your answers.")
+
+    feedback = " ".join(feedback_parts)
 
     return {
-        "clarity": clarity,
-        "confidence": confidence,
+        "clarity":     clarity,
+        "confidence":  confidence,
         "conciseness": conciseness,
-        "technical": technical,
-        "overall": overall,
-        "feedback": feedback.strip()
+        "technical":   technical,
+        "overall":     overall,
+        "feedback":    feedback
     }
-from bson import ObjectId
-
 # =========================
 # READ: Get interview by ID
 # =========================
@@ -385,64 +414,76 @@ async def get_latest_interview():
     }
 
 @app.get("/evaluate-latest")
-async def evaluate_latest(request:Request):
-
+async def evaluate_latest(request: Request):
     try:
         user_id = get_user_id_from_request(request)
         if not user_id:
             return {"error": "Not logged in"}
-        
+
         interview = await interviews_collection.find_one(
             {"user_id": ObjectId(user_id)},
             sort=[("created_at", -1)]
         )
-
         if not interview:
             return {"error": "No interviews found"}
 
-        transcript = interview.get("transcript")
+        transcript = interview.get("transcript", "")
         role = interview.get("role", "web_developer")
 
-        if not transcript or len(transcript.strip()) < 20:
-            return {"error": "Transcript too short to evaluate"}
+        # Count actual user lines before doing anything
+        user_lines = [
+            l for l in transcript.split("\n")
+            if l.startswith("USER:")
+        ]
+        user_word_count = sum(
+            len(l.replace("USER:", "").split())
+            for l in user_lines
+        )
 
-        # ✅ Prevent duplicate evaluation
-        existing_feedback = await feedback_collection.find_one({
+        print(f"User lines: {len(user_lines)}, User words: {user_word_count}")
+
+        #  Reject empty or trivially short interviews
+        if not transcript or user_word_count < 30 or len(user_lines) < 2:
+            return {"error": "Interview too short to evaluate — please complete more of the interview."}
+
+        # Return existing feedback if already evaluated
+        existing = await feedback_collection.find_one({
             "interview_id": interview["_id"]
         })
-
-        if existing_feedback:
+        if existing:
             return {
                 "evaluation": {
-                    "clarity": existing_feedback.get("clarity_score"),
-                    "confidence": existing_feedback.get("confidence_score"),
-                    "conciseness": existing_feedback.get("conciseness_score"),
-                    "technical": existing_feedback.get("technical_score"),
-                    "overall": existing_feedback.get("overall_score"),
-                    "feedback": existing_feedback.get("feedback_text")
+                    "clarity":     existing.get("clarity_score"),
+                    "confidence":  existing.get("confidence_score"),
+                    "conciseness": existing.get("conciseness_score"),
+                    "technical":   existing.get("technical_score"),
+                    "overall":     existing.get("overall_score"),
+                    "feedback":    existing.get("feedback_text")
                 }
             }
 
-        print("Evaluating role:", role)
-
-        # ✅ RULE-BASED evaluation
         evaluation = evaluate_transcript_advanced(transcript, role)
 
+        # Handle None return from evaluator
+        if evaluation is None:
+            return {"error": "Not enough user responses to evaluate."}
+
         await feedback_collection.insert_one({
-            "interview_id": interview["_id"],
-            "clarity_score": evaluation["clarity"],
+            "interview_id":     interview["_id"],
+            "user_id":          ObjectId(user_id),
+            "clarity_score":    evaluation["clarity"],
             "confidence_score": evaluation["confidence"],
-            "conciseness_score": evaluation["conciseness"],
-            "technical_score": evaluation["technical"],
-            "overall_score": evaluation["overall"],
-            "feedback_text": evaluation["feedback"],
-            "evaluated_at": datetime.utcnow()
+            "conciseness_score":evaluation["conciseness"],
+            "technical_score":  evaluation["technical"],
+            "overall_score":    evaluation["overall"],
+            "feedback_text":    evaluation["feedback"],
+            "evaluated_at":     datetime.utcnow()
         })
 
         return {"evaluation": evaluation}
 
     except Exception as e:
-        print("FULL ERROR:", e)
+        print("evaluate-latest error:", e)
         return {"error": str(e)}
     
 @app.get("/evaluation", response_class=HTMLResponse)
@@ -545,9 +586,9 @@ async def reports_page(request: Request):
     return templates.TemplateResponse("reports.html", {"request": request})
 
 @app.get("/logout")
-async def logout(response: RedirectResponse):
+async def logout():
     response = RedirectResponse(url="/login", status_code=302)
-    response.delete_cookie("user_id")
+    response.delete_cookie("access_token")     # this is what auth sets
     response.delete_cookie("selected_role")
     return response
 
